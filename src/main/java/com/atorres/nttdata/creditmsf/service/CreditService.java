@@ -23,6 +23,11 @@ import java.util.Date;
 @Slf4j
 public class CreditService {
 	/**
+	 * Kafka Producer
+	 */
+	@Autowired
+	private KafkaStringProducer kafkaStringProducer;
+	/**
 	 *Repositorio creditos
 	 */
 	@Autowired
@@ -42,7 +47,9 @@ public class CreditService {
 
 	public Mono<CreditDto> getCredit(String creditId){
 		return creditRepository.findById(creditId)
-						.map(requestMapper::toDto);
+				.switchIfEmpty(Mono.error(new CustomException(HttpStatus.NOT_FOUND, "No existe credito para ese id")))
+				.map(requestMapper::toDto)
+				.doOnSuccess(v->kafkaStringProducer.sendMessage("credit-msf : Credito encontrado con exito"));
 	}
 
 	/**
@@ -64,7 +71,8 @@ public class CreditService {
 							return strategyCredit.verifyCredit(creditAll).flatMap(exist -> Boolean.FALSE.equals(exist) ? Mono.error(new CustomException(HttpStatus.BAD_REQUEST, "El credito no cumplen los requisitos"))
 											: creditRepository.save(requestMapper.toDao(cr)));
 						})
-						.map(requestMapper::toDto);
+						.map(requestMapper::toDto)
+				.doOnSuccess(v->kafkaStringProducer.sendMessage("credit-msf : Credito creado con exito"));
 	}
 
 	private Mono<ClientDto> verificandoDeudas(String clientId){
@@ -86,7 +94,8 @@ public class CreditService {
 		return creditRepository.findAll()
 						.filter(creditDao -> creditDao.getClient().equals(clientId))
 						.map(requestMapper::toDto)
-						.switchIfEmpty(Flux.empty());
+						.switchIfEmpty(Flux.empty())
+				.doOnComplete(()-> kafkaStringProducer.sendMessage("credit-msf : Creditos del cliente encontrado con exito"));
 	}
 
 	/**
@@ -98,7 +107,8 @@ public class CreditService {
 		return creditRepository.findAll()
 						.filter(creditDao -> creditDao.getClient().equals(clientId))
 						.any(creditDao -> creditDao.getExpirationDate().before(new Date()))
-						.switchIfEmpty(Mono.just(false));
+						.switchIfEmpty(Mono.just(false))
+				.doOnSuccess(v->kafkaStringProducer.sendMessage("credit-msf : Verificacion de deudas exitosa"));
 	}
 
 	/**
@@ -120,7 +130,8 @@ public class CreditService {
 								return creditRepository.save(cr)
 												.map(requestMapper::toDto);
 							}
-						});
+						})
+				.doOnSuccess(v -> kafkaStringProducer.sendMessage("credit-msf : Credito actualizado con exito"));
 	}
 
 	/**
@@ -131,7 +142,8 @@ public class CreditService {
 	public Mono<Void> delete(String creditId) {
 		return creditRepository.findById(creditId)
 						.switchIfEmpty(Mono.error(new CustomException(HttpStatus.NOT_FOUND, "No se encontro el credito")))
-						.flatMap(creditDao -> creditRepository.delete(creditDao));
+						.flatMap(creditDao -> creditRepository.delete(creditDao))
+				.doOnSuccess(v-> kafkaStringProducer.sendMessage("credit-msf : Credito eliminado con exito"));
 	}
 
 }

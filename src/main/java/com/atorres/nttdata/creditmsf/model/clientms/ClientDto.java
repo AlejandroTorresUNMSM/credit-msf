@@ -11,4 +11,5 @@ public class ClientDto {
     private String nroDocument;
     private String name;
     private ClientType typeClient;
+    private String phone;
 }

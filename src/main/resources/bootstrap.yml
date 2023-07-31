@@ -1,6 +1,6 @@
 spring:
   application:
-    name: prod-active-ms-dev
+    name: credit-msf-dev
   cloud:
     config:
       uri: http://localhost:8888
